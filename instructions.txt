@@ -1,0 +1,238 @@
+# SMS Hub Physical Modem Integration System - Detailed Technical Specification
+
+Create a Python-based integration system that connects physical GSM modems to the SMS Hub API service. The system acts as a middleware between GSM modems with physical SIM cards and the SMS Hub service (https://agent.unerio.com/agent/api/sms).
+
+## Core System Components
+
+1. SMS Hub Server (smshub_server.py)
+   - Flask server running on 0.0.0.0:5000
+   - Handles all SMS Hub API endpoints
+   - Manages modem registry using port as key
+   - Tracks active numbers and service usage
+   - No timeout/cleanup functionality
+   - Color-coded status display (green=active, red=busy)
+
+2. Modem Manager (modem_manager.py) 
+   - Handles AT command communication with physical modems
+   - Monitors modem status and signal quality
+   - Detects and forwards incoming SMS
+   - Validates phone numbers
+   - Tracks ICCID/IMEI
+
+3. Activation Logger (activation_logger.py)
+   - SQLite database with WAL mode
+   - Logs all activations and status changes
+   - Tracks SMS delivery
+   - Implements retry mechanism for DB operations
+   - No activation duration tracking
+
+4. SMS Hub Integration (smshub_integration.py)
+   - Direct communication with SMS Hub API
+   - Handles all API requests/responses
+   - Error handling and logging
+   - No caching of responses
+
+## Required API Endpoints
+
+1. GET_SERVICES
+   - Returns available physical modems
+   - Format: {"status": "SUCCESS", "countryList": [{"country": "usaphysical", "operatorMap": {"physic": {"wa": 5}}}]}
+   - Only returns actually available modems
+
+2. GET_NUMBER
+   - Assigns phone number for activation
+   - Validates service availability
+   - Checks service usage count (max 4 per service)
+   - Returns activation_id and phone number
+
+3. FINISH_ACTIVATION
+   - Updates activation status
+   - Status codes:
+     1 = Waiting
+     2 = Ready
+     3 = Completed
+     4 = Cancelled (reusable 3 more times)
+     5 = Refunded
+     6-10 = Various error states
+
+4. PUSH_SMS
+   - Immediately forwards received SMS to SMS Hub
+   - No queuing or batching
+   - Includes all required fields
+
+## Database Schema
+
+1. Activations Table
+   - activation_id (PRIMARY KEY)
+   - phone
+   - service
+   - status
+   - created_at
+   - updated_at
+
+2. SMS Logs Table
+   - id (PRIMARY KEY)
+   - activation_id
+   - text
+   - sender
+   - received_at
+
+## Critical Requirements
+
+1. Status Management
+   - Only SMS Hub controls activation lifecycle
+   - No automatic status changes
+   - No timeout-based cleanup
+   - Accurate status tracking
+
+2. Service Usage Tracking
+   - Track uses per phone/service
+   - Max 4 uses when status=4
+   - Reset on new service
+
+3. Modem Status
+   - Active/Busy states
+   - Color-coded display
+   - Real-time updates
+   - Signal quality monitoring
+
+4. SMS Handling
+   - Immediate forwarding
+   - No queuing
+   - Complete message capture
+   - Proper error handling
+
+## Configuration Requirements
+
+1. Services Config
+   - Enabled services list
+   - API credentials
+   - Server settings
+   - Database paths
+
+2. Modem Settings
+   - Port configurations
+   - AT command timeouts
+   - Signal thresholds
+   - Status check intervals
+
+## GUI Dashboard Requirements
+
+1. Modem Display
+   - Port number
+   - Phone number
+   - Status (color-coded)
+   - Signal strength
+   - Current service
+
+2. Activity Monitor
+   - Recent activations
+   - Status changes
+   - SMS received
+   - Error log
+
+## Required Dependencies
+
+1. Server
+   - Flask
+   - Flask-Compress
+   - Requests
+   - SQLite3
+
+2. Modem Communication
+   - PySerial
+   - AT Command library
+
+3. Utilities
+   - Python-dotenv
+   - Colorama
+   - Logging
+
+## Implementation Rules
+
+1. NEVER:
+   - Track activation time
+   - Auto-cancel activations
+   - Cache responses
+   - Clean up "stale" activations
+   - Modify status without SMS Hub instruction
+
+2. ALWAYS:
+   - Follow SMS Hub protocol exactly
+   - Forward SMS immediately
+   - Track service usage accurately
+   - Log all operations
+   - Handle errors gracefully
+   - Keep accurate modem status
+
+## Error Handling Requirements
+
+1. Database Errors
+   - Implement retries
+   - Transaction safety
+   - Connection pooling
+   - Error logging
+
+2. API Errors
+   - Proper status codes
+   - Detailed error messages
+   - Retry mechanism
+   - Error logging
+
+3. Modem Errors
+   - Connection recovery
+   - Command retries
+   - Status reset
+   - Error notification
+
+## Testing Requirements
+
+1. Unit Tests
+   - API endpoints
+   - Database operations
+   - Modem commands
+   - Status tracking
+
+2. Integration Tests
+   - Full activation flow
+   - SMS handling
+   - Error recovery
+   - Status updates
+
+## Documentation Requirements
+
+1. Code Documentation
+   - Function docstrings
+   - Type hints
+   - Error descriptions
+   - Configuration guide
+
+2. User Documentation
+   - Setup instructions
+   - Troubleshooting guide
+   - API reference
+   - Configuration options
+
+## Security Requirements
+
+1. API Security
+   - Key validation
+   - Input sanitization
+   - Error message safety
+   - Request validation
+
+2. Data Security
+   - Database encryption
+   - Secure logging
+   - Safe error handling
+   - Access control
+
+The system must be built exactly to these specifications with particular focus on:
+1. Following SMS Hub protocol exactly as documented
+2. No automatic cleanup or timeout functionality
+3. Immediate SMS forwarding
+4. Accurate service usage tracking
+5. Proper error handling and logging
+6. Real-time status display
+
+Remember: This system is a passive bridge between physical modems and SMS Hub. All activation control must come from SMS Hub - the system only manages modems and forwards communications.
